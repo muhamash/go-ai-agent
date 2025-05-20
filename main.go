@@ -18,7 +18,8 @@ type Message struct {
 }
 
 type AIRequest struct {
-	Messages []Message `json:"messages"`
+	Prompt   string    `json:"prompt"`   // Optional simple input
+	Messages []Message `json:"messages"` // Optional advanced input
 	Stream   bool      `json:"stream"`
 }
 
@@ -44,23 +45,29 @@ func main() {
 			return
 		}
 
-		if len(req.Messages) == 0 {
-			// Add default system + user message if not provided
-			req.Messages = []Message{
-				{Role: "system", Content: "You are a highly intelligent and creative AI assistant."},
-				{Role: "user", Content: "Hello!"},
+		// Convert simple prompt to system+user messages if messages not provided
+		var messages []Message
+		if len(req.Messages) > 0 {
+			messages = req.Messages
+		} else if req.Prompt != "" {
+			messages = []Message{
+				{Role: "system", Content: "You are a helpful, creative and intelligent AI assistant."},
+				{Role: "user", Content: req.Prompt},
 			}
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Prompt or messages are required"})
+			return
 		}
 
 		openaiReq := OpenAIStreamRequest{
-			Model:    "gpt-4",
-			Messages: req.Messages,
+			Model: "gpt-3.5-turbo",
+			Messages: messages,
 			Stream:   true,
 		}
 
 		body, _ := json.Marshal(openaiReq)
 
-		request, _ := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", io.NopCloser(bufio.NewReader(bytes.NewReader(body))))
+		request, _ := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", io.NopCloser(bytes.NewReader(body)))
 		request.Header.Set("Authorization", "Bearer "+apiKey)
 		request.Header.Set("Content-Type", "application/json")
 
@@ -71,25 +78,26 @@ func main() {
 		}
 		defer resp.Body.Close()
 
-		// Set headers to enable streaming
+		// Enable streaming response to frontend
 		c.Writer.Header().Set("Content-Type", "text/event-stream")
 		c.Writer.Header().Set("Cache-Control", "no-cache")
 		c.Writer.Header().Set("Connection", "keep-alive")
 		c.Writer.Flush()
 
 		scanner := bufio.NewScanner(resp.Body)
-
 		for scanner.Scan() {
 			line := scanner.Text()
-
-			// Skip heartbeat or empty lines
 			if line == "" || line == "data: [DONE]" {
 				continue
 			}
 
-			// Extract content safely
+			// Remove "data: " prefix
+			if len(line) > 6 && line[:6] == "data: " {
+				line = line[6:]
+			}
+
 			var parsed map[string]interface{}
-			if err := json.Unmarshal([]byte(line[6:]), &parsed); err == nil {
+			if err := json.Unmarshal([]byte(line), &parsed); err == nil {
 				if choices, ok := parsed["choices"].([]interface{}); ok {
 					if delta, ok := choices[0].(map[string]interface{})["delta"].(map[string]interface{}); ok {
 						if content, ok := delta["content"].(string); ok {
