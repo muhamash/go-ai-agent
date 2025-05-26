@@ -44,6 +44,12 @@ func main() {
 
 	router := gin.Default()
 
+	router.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Welcome to the AI Agent API. Use POST /ai-agent with a JSON body to interact with the AI.",
+		})
+	})
+
 	router.POST("/ai-agent", func(c *gin.Context) {
 		var req AIRequest
 		if err := c.BindJSON(&req); err != nil {
