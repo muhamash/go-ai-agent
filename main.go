@@ -442,121 +442,126 @@ func main() {
 		c.JSON(http.StatusOK, stats)
 	})
 
-	// Enhanced AI agent endpoint with Redis session management
+	// Handle AI chat requests
 	router.POST("/ai-agent", func(c *gin.Context) {
 		var req AIRequest
 		if err := c.BindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error":   "Invalid request body",
-				"details": err.Error(),
-			})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 			return
 		}
 
-		// Validate input
-		if req.Prompt == "" && len(req.Messages) == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "Either 'prompt' or 'messages' must be provided",
-			})
+		// Get or create session
+		session, err := sessionManager.GetOrCreateSession(req.SessionId, req.SystemRole)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load session"})
 			return
 		}
 
-		var messages []Message
-		var sessionId string
-
-		if len(req.Messages) > 0 {
-			// Direct messages provided - use as is but still manage session
-			messages = req.Messages
-			sessionId = req.SessionId
-		} else {
-			// Simple prompt provided - use automatic role management
-			var session *ConversationSession
-			session, err = sessionManager.GetOrCreateSession(req.SessionId, req.SystemRole)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"error": "Failed to manage session: " + err.Error(),
-				})
-				return
-			}
-			sessionId = session.SessionId
-
-			// Add user message to session
-			userMessage := Message{Role: "user", Content: req.Prompt}
-			if err := sessionManager.AddMessage(sessionId, userMessage); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"error": "Failed to add message to session: " + err.Error(),
-				})
-				return
-			}
-
-			// Get conversation history with limit
-			maxHistory := req.MaxHistory
-			if maxHistory == 0 {
-				maxHistory = 10 // Default to last 10 exchanges
-			}
-			
-			messages, err = sessionManager.GetMessages(sessionId, maxHistory)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"error": "Failed to get conversation history: " + err.Error(),
-				})
-				return
-			}
+		// Append the user message to the session
+		userMessage := Message{Role: "user", Content: req.Prompt}
+		if err := sessionManager.AddMessage(session.SessionId, userMessage); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save message"})
+			return
 		}
 
-		// Create OpenAI request
+		// Get session messages, trimmed to maxHistory
+		messages, err := sessionManager.GetMessages(session.SessionId, req.MaxHistory)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get messages"})
+			return
+		}
+
+		// Prepare request to OpenAI
 		openaiReq := OpenAIRequest{
-			Model:       "gpt-3.5-turbo",
-			Messages:    messages,
-			Stream:      req.Stream,
-			Temperature: 0.7,
-			MaxTokens:   10,
+			Model:    "gpt-3.5-turbo",
+			Messages: messages,
+			Stream:   req.Stream,
+			MaxTokens: 50,
 		}
 
+		// Marshal request
 		reqBody, err := json.Marshal(openaiReq)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Failed to encode request body",
-			})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encode OpenAI request"})
 			return
 		}
 
-		// Create HTTP request to OpenAI
-		httpReq, err := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", bytes.NewBuffer(reqBody))
+		// Prepare OpenAI HTTP request
+		openaiReqURL := "https://api.openai.com/v1/chat/completions"
+		httpReq, err := http.NewRequest("POST", openaiReqURL, bytes.NewBuffer(reqBody))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Failed to create OpenAI request",
-			})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create OpenAI request"})
 			return
 		}
-
 		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
 		httpReq.Header.Set("Content-Type", "application/json")
 
-		resp, err := http.DefaultClient.Do(httpReq)
+		// Send request
+		client := &http.Client{}
+		resp, err := client.Do(httpReq)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Failed to contact OpenAI API",
-			})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "OpenAI API request failed"})
 			return
 		}
 		defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusOK {
+		if !req.Stream {
 			body, _ := io.ReadAll(resp.Body)
-			c.JSON(resp.StatusCode, gin.H{
-				"error":      "OpenAI API returned error",
-				"statusCode": resp.StatusCode,
-				"body":       string(body),
-			})
-			return
-		}
 
-		// Handle streaming vs non-streaming responses
-		if req.Stream {
-			handleStreamingResponse(c, resp, sessionId)
+			var responseData map[string]interface{}
+			if err := json.Unmarshal(body, &responseData); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse OpenAI response"})
+				return
+			}
+
+			// Extract assistant message and store it
+			if choices, ok := responseData["choices"].([]interface{}); ok && len(choices) > 0 {
+				choice := choices[0].(map[string]interface{})
+				if message, ok := choice["message"].(map[string]interface{}); ok {
+					assistantMessage := Message{
+						Role:    message["role"].(string),
+						Content: message["content"].(string),
+					}
+					_ = sessionManager.AddMessage(session.SessionId, assistantMessage)
+				}
+			}
+
+			c.Data(http.StatusOK, "application/json", body)
 		} else {
-			handleNonStreamingResponse(c, resp, sessionId)
+			// Streamed response
+			c.Writer.Header().Set("Content-Type", "text/event-stream")
+			c.Writer.Header().Set("Cache-Control", "no-cache")
+			c.Writer.Header().Set("Connection", "keep-alive")
+
+			scanner := bufio.NewScanner(resp.Body)
+			var streamedContent string
+
+			for scanner.Scan() {
+				line := scanner.Text()
+
+				if strings.HasPrefix(line, "data: ") {
+					payload := strings.TrimPrefix(line, "data: ")
+
+					if payload == "[DONE]" {
+						break
+					}
+
+					var streamResp OpenAIStreamResponse
+					if err := json.Unmarshal([]byte(payload), &streamResp); err == nil {
+						for _, choice := range streamResp.Choices {
+							c.Writer.Write([]byte(choice.Delta.Content))
+							streamedContent += choice.Delta.Content
+						}
+						c.Writer.Flush()
+					}
+				}
+			}
+
+			// Save assistant response to session
+			_ = sessionManager.AddMessage(session.SessionId, Message{
+				Role:    "assistant",
+				Content: streamedContent,
+			})
 		}
 	})
 
