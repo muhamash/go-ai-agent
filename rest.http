@@ -1,9 +1,11 @@
 POST http://localhost:8080/ai-agent
 Content-Type: application/json
 
-{
-    "messages": [
-      { "role": "system", "content": "You are a witty AI assistant." },
-      { "role": "user", "content": "Tell me a programming joke." }
-    ]
-}
+{"prompt": "tell what i said before", "stream": false,"session_id": "session_1748364691636229000" }
+
+# {
+#     "messages": [
+#       { "role": "system", "content": "You are a witty AI assistant." },
+#       { "role": "user", "content": "Tell me a programming joke." }
+#     ]
+# }
