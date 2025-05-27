@@ -476,7 +476,7 @@ func main() {
 			Model:    "gpt-3.5-turbo",
 			Messages: messages,
 			Stream:   req.Stream,
-			MaxTokens: 50,
+			MaxTokens: 100,
 		}
 
 		// Marshal request
