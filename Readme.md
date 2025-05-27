@@ -1,236 +1,140 @@
-# Redis Integration Setup
+# 🧠 AI Gateway with Redis Integration
 
-## 1. Install Redis Dependencies
+A high-performance, production-ready AI Gateway built with **Go (Gin Framework)**, **OpenAI API**, and **Redis** for session persistence and scalability. Designed for streaming and non-streaming AI interactions, with full support for stateful chat and Redis-backed session management.
 
-First, you need to install the Redis Go client:
+---
 
-```bash
-go mod init ai-gateway
-go get github.com/go-redis/redis/v8
-go get github.com/gin-gonic/gin
-go get github.com/gin-contrib/cors
-go get github.com/joho/godotenv
+## 🚀 Features
+
+- 🔌 **OpenAI Proxy API** (`/ai-agent`)
+- 🧠 **Contextual Conversations** using Redis-backed session storage
+- 🧮 **Session TTL & Expiration** (configurable)
+- 📊 **Memory & Stats Endpoints**
+- 📁 **Dockerized Setup** with Redis
+- ☁️ Compatible with local or cloud-hosted Redis (e.g., Upstash, Redis Cloud)
+- 🧰 Simple `.env` configuration for flexible deployments
+
+---
+
+## 📦 Tech Stack
+
+- **Backend**: Go (Gin)
+- **AI API**: OpenAI API (GPT-4 / GPT-3.5)
+- **Session Storage**: Redis
+- **Containerization**: Docker & Docker Compose
+- **Environment Management**: `godotenv`
+
+---
+
+## 🌐 API Endpoints
+
+### 🧠 POST `/ai-agent`
+Handles AI prompts and session-based memory.
+
+**Request JSON:**
+```json
+{
+  "prompt": "Hello, who are you?",
+  "session_id": "optional-session-id",
+  "stream": false
+}
 ```
 
-## 2. Environment Configuration (.env file)
+### 📁 GET `/session/:session_id`
+Retrieve full session conversation by session ID.
 
-Create a `.env` file in your project root:
+### 📄 GET `/sessions`
+List all active session IDs stored in Redis.
 
+### ❌ DELETE `/session/:session_id`
+Delete a session and its associated memory.
+
+### 📊 GET `/stats`
+Returns system and Redis usage stats:
+```json
+{
+  "total_sessions": 3,
+  "memory_usage": "150 KB",
+  "uptime": "3 hours"
+}
+```
+
+---
+
+## 🔐 Environment Configuration
+
+Sample `.env` variables:
 ```env
 # OpenAI Configuration
-OPENAI_API_KEY=sk-your-openai-api-key-here
+OPENAI_API_KEY=sk-xxx
 
 # Redis Configuration
 REDIS_URL=redis://localhost:6379
-# OR use individual Redis settings:
-# REDIS_PASSWORD=your-redis-password
-# REDIS_DB=0
-
-# Session Configuration
 SESSION_TTL_HOURS=24
 
-# Server Configuration
+# Server
 PORT=8080
 ```
 
-## 3. Docker Compose for Local Development
+---
 
-Create `docker-compose.yml`:
+## 🐳 Docker & Redis Integration
 
-```yaml
-version: '3.8'
-services:
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes
-    
-  ai-gateway:
-    build: .
-    ports:
-      - "8080:8080"
-    depends_on:
-      - redis
-    environment:
-      - REDIS_URL=redis://redis:6379
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    env_file:
-      - .env
+Includes:
+- `Dockerfile` for multi-stage Go build
+- `docker-compose.yml` with Redis service
+- Automatic environment injection via `.env`
 
-volumes:
-  redis_data:
-```
+---
 
-## 4. Dockerfile
+## ☁️ Deployment-Ready
 
-Create `Dockerfile`:
+- ✅ Works with **Upstash**, **Redis Cloud**, **Railway**, and more
+- ✅ Scalable Redis-backed session store
+- ✅ Stateless Go services ready for container orchestration
 
-```dockerfile
-FROM golang:1.21-alpine AS builder
+---
 
-WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
+## 📈 Benefits of Redis Integration
 
-COPY . .
-RUN go build -o ai-gateway main.go
+| Feature               | Benefit                                           |
+|----------------------|----------------------------------------------------|
+| Persistent Sessions  | Survive server restarts                           |
+| TTL Management       | Automatic memory cleanup                          |
+| Shared Memory        | Scalable across containers or nodes               |
+| Fast Access          | In-memory key-value retrieval                     |
+| Statistics & Metrics | Built-in health and usage monitoring              |
 
-FROM alpine:latest
-RUN apk --no-cache add ca-certificates
-WORKDIR /root/
+---
 
-COPY --from=builder /app/ai-gateway .
-COPY --from=builder /app/.env .
+## 📬 Example Usage
 
-CMD ["./ai-gateway"]
-```
-
-## 5. Installation Options
-
-### Option A: Local Redis Installation
-
-**Ubuntu/Debian:**
-```bash
-sudo apt update
-sudo apt install redis-server
-sudo systemctl start redis-server
-sudo systemctl enable redis-server
-```
-
-**macOS:**
-```bash
-brew install redis
-brew services start redis
-```
-
-**Windows:**
-- Download Redis from GitHub releases
-- Or use WSL2 with Ubuntu installation
-
-### Option B: Docker Redis
-```bash
-# Start Redis with Docker
-docker run -d --name redis -p 6379:6379 redis:7-alpine
-
-# Or use docker-compose
-docker-compose up -d redis
-```
-
-### Option C: Cloud Redis Services
-- **AWS ElastiCache**
-- **Google Cloud Memorystore**
-- **Azure Cache for Redis**
-- **Redis Cloud**
-- **Railway/Heroku Redis**
-
-## 6. Running the Application
-
-### Local Development:
-```bash
-# Start Redis (if not running)
-redis-server
-
-# Run the Go application
-go run main.go
-```
-
-### With Docker:
-```bash
-# Build and run everything
-docker-compose up --build
-```
-
-## 7. Redis Features Implemented
-
-### Session Management:
-- **Persistent Sessions**: Sessions survive server restarts
-- **TTL Management**: Automatic session expiration
-- **Scalability**: Multiple server instances can share sessions
-
-### Key Features:
-- ✅ **Session Storage**: Complete conversation history
-- ✅ **Automatic Expiration**: Configurable TTL (default 24 hours)
-- ✅ **Memory Efficiency**: Only active sessions in memory
-- ✅ **Scalability**: Horizontal scaling support
-- ✅ **Persistence**: Sessions survive server restarts
-- ✅ **Statistics**: Redis memory usage and session stats
-
-## 8. API Usage Examples
-
-### Basic Chat:
+**Simple Prompt Call:**
 ```bash
 curl -X POST http://localhost:8080/ai-agent \
   -H "Content-Type: application/json" \
-  -d '{"prompt": "Hello, AI!"}'
+  -d '{"prompt": "Tell me a joke!"}'
 ```
 
-### With Session Management:
+**Stateful Chat with Session:**
 ```bash
-# First message
 curl -X POST http://localhost:8080/ai-agent \
   -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "My name is John and I love programming",
-    "session_id": "user_123"
-  }'
-
-# Continue conversation (AI remembers context)
-curl -X POST http://localhost:8080/ai-agent \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "What did I just tell you about myself?",
-    "session_id": "user_123"
-  }'
+  -d '{"prompt": "My name is John", "session_id": "john123"}'
 ```
 
-### Session Management:
-```bash
-# Get session info
-curl http://localhost:8080/session/user_123
+---
 
-# List all sessions
-curl http://localhost:8080/sessions
+## 🧩 License
 
-# Delete session
-curl -X DELETE http://localhost:8080/session/user_123
+MIT — feel free to use, extend, or contribute!
 
-# Get system stats
-curl http://localhost:8080/stats
-```
+---
 
-## 9. Redis Configuration Options
+## 👨‍💻 Author
 
-### Environment Variables:
-- `REDIS_URL`: Full Redis connection URL
-- `REDIS_PASSWORD`: Redis password (if required)
-- `REDIS_DB`: Redis database number (default: 0)
-- `SESSION_TTL_HOURS`: Session expiration time in hours
+**Muhammad Ashraful**  
+2.5+ years full-stack experience — Next.js, Go, AI & cloud-native tools  
+[GitHub](https://github.com/your-username) | [LinkedIn](https://linkedin.com/in/your-profile)
 
-### Production Considerations:
-- Use Redis Cluster for high availability
-- Configure Redis persistence (RDB + AOF)
-- Set up Redis monitoring
-- Use connection pooling
-- Implement Redis auth and SSL
-
-## 10. Benefits of Redis Integration
-
-### Performance:
-- **Fast Access**: In-memory storage for quick session retrieval
-- **Scalability**: Multiple server instances share sessions
-- **Memory Efficiency**: Automatic cleanup of expired sessions
-
-### Reliability:
-- **Persistence**: Sessions survive server restarts
-- **Atomic Operations**: Thread-safe session updates
-- **Backup**: Redis persistence options (RDB/AOF)
-
-### Monitoring:
-- **Statistics**: Built-in session and memory stats
-- **Health Checks**: Redis connection monitoring
-- **Debugging**: Session inspection endpoints
-
-This Redis integration transforms your AI Gateway into a production-ready, scalable service with persistent conversation memory!
+---

@@ -311,7 +311,7 @@ func main() {
 	}
 
 	// Redis configuration
-	redisURL := os.Getenv("REDIS_URL") // For cloud deployments (Heroku, Railway, etc.)
+	redisURL := os.Getenv("REDIS_URL") 
 	redisPassword := os.Getenv("REDIS_PASSWORD")
 	redisDB := 0
 	if dbStr := os.Getenv("REDIS_DB"); dbStr != "" {

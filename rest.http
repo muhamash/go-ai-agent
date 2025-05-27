@@ -1,7 +1,7 @@
 POST http://localhost:8080/ai-agent
 Content-Type: application/json
 
-{"prompt": "tell what i said before", "stream": false,"session_id": "session_1748364691636229000" }
+{"prompt": "what is my name", "stream": false , "session_id":"null"}
 
 # {
 #     "messages": [
@@ -9,3 +9,21 @@ Content-Type: application/json
 #       { "role": "user", "content": "Tell me a programming joke." }
 #     ]
 # }
+
+# {
+#   "count": 3,
+#   "sessions": [
+#     "session_1748364598007290000",
+#     "session_1748364691636229000",
+#     "session_1748364639113274000"
+#   ]
+
+
+# GET  http://localhost:8080/sessions
+# Content-Type: application/json
+
+# GET http://localhost:8080/stats
+# Content-Type: application/json
+
+# GET http://localhost:8080/session/session_1748365098526970000
+# Content-Type: application/json
