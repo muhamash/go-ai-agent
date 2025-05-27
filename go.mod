@@ -3,6 +3,7 @@ module github.com/muhamash/go-ai-agent
 go 1.24.3
 
 require (
+	github.com/gin-contrib/cors v1.4.0
 	github.com/gin-gonic/gin v1.10.1
 	github.com/joho/godotenv v1.5.1
 )

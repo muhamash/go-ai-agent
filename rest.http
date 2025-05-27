@@ -1,11 +1,9 @@
-POST http://localhost:8000/ai-agent
-Content-Type: text/event-stream
+POST http://localhost:8080/ai-agent
+Content-Type: application/json
 
 {
     "messages": [
       { "role": "system", "content": "You are a witty AI assistant." },
       { "role": "user", "content": "Tell me a programming joke." }
-    ],
-    "stream": true,
-    "muhamash_token_key": "aj5R8Nb8FT-T3BlbkFJGlvOmTFKRX7-kUykxXLoAdpYcpe0l4EQZnat_KNb98h-qaiQh22A9J54_oTQ3VFfndHu89WlcA"
+    ]
 }
