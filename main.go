@@ -577,107 +577,107 @@ func main() {
 	router.Run(":" + port)
 }
 
-func handleStreamingResponse(c *gin.Context, resp *http.Response, sessionId string) {
-	// Set up Server-Sent Events headers
-	c.Writer.Header().Set("Content-Type", "text/event-stream")
-	c.Writer.Header().Set("Cache-Control", "no-cache")
-	c.Writer.Header().Set("Connection", "keep-alive")
-	c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-	c.Writer.Flush()
+// func handleStreamingResponse(c *gin.Context, resp *http.Response, sessionId string) {
+// 	// Set up Server-Sent Events headers
+// 	c.Writer.Header().Set("Content-Type", "text/event-stream")
+// 	c.Writer.Header().Set("Cache-Control", "no-cache")
+// 	c.Writer.Header().Set("Connection", "keep-alive")
+// 	c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+// 	c.Writer.Flush()
 
-	scanner := bufio.NewScanner(resp.Body)
-	var assistantResponse strings.Builder
+// 	scanner := bufio.NewScanner(resp.Body)
+// 	var assistantResponse strings.Builder
 
-	for scanner.Scan() {
-		line := scanner.Text()
+// 	for scanner.Scan() {
+// 		line := scanner.Text()
 
-		if line == "" {
-			continue
-		}
+// 		if line == "" {
+// 			continue
+// 		}
 
-		if strings.TrimSpace(line) == "data: [DONE]" {
-			fmt.Fprint(c.Writer, "data: [DONE]\n\n")
-			c.Writer.Flush()
-			break
-		}
+// 		if strings.TrimSpace(line) == "data: [DONE]" {
+// 			fmt.Fprint(c.Writer, "data: [DONE]\n\n")
+// 			c.Writer.Flush()
+// 			break
+// 		}
 
-		if strings.HasPrefix(line, "data: ") {
-			jsonData := strings.TrimPrefix(line, "data: ")
+// 		if strings.HasPrefix(line, "data: ") {
+// 			jsonData := strings.TrimPrefix(line, "data: ")
 
-			var streamResp OpenAIStreamResponse
-			if err := json.Unmarshal([]byte(jsonData), &streamResp); err == nil {
-				if len(streamResp.Choices) > 0 {
-					content := streamResp.Choices[0].Delta.Content
-					if content != "" {
-						assistantResponse.WriteString(content)
-						fmt.Fprint(c.Writer, content)
-						c.Writer.Flush()
-					}
-				}
-			}
-		}
-	}
+// 			var streamResp OpenAIStreamResponse
+// 			if err := json.Unmarshal([]byte(jsonData), &streamResp); err == nil {
+// 				if len(streamResp.Choices) > 0 {
+// 					content := streamResp.Choices[0].Delta.Content
+// 					if content != "" {
+// 						assistantResponse.WriteString(content)
+// 						fmt.Fprint(c.Writer, content)
+// 						c.Writer.Flush()
+// 					}
+// 				}
+// 			}
+// 		}
+// 	}
 
-	// Save assistant response to Redis session
-	if sessionId != "" && assistantResponse.Len() > 0 {
-		assistantMessage := Message{
-			Role:    "assistant",
-			Content: assistantResponse.String(),
-		}
-		if err := sessionManager.AddMessage(sessionId, assistantMessage); err != nil {
-			fmt.Printf("Failed to save assistant response to session: %v\n", err)
-		}
-	}
+// 	// Save assistant response to Redis session
+// 	if sessionId != "" && assistantResponse.Len() > 0 {
+// 		assistantMessage := Message{
+// 			Role:    "assistant",
+// 			Content: assistantResponse.String(),
+// 		}
+// 		if err := sessionManager.AddMessage(sessionId, assistantMessage); err != nil {
+// 			fmt.Printf("Failed to save assistant response to session: %v\n", err)
+// 		}
+// 	}
 
-	if err := scanner.Err(); err != nil {
-		fmt.Printf("Error reading stream: %v\n", err)
-	}
-}
+// 	if err := scanner.Err(); err != nil {
+// 		fmt.Printf("Error reading stream: %v\n", err)
+// 	}
+// }
 
-func handleNonStreamingResponse(c *gin.Context, resp *http.Response, sessionId string) {
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to read OpenAI response",
-		})
-		return
-	}
+// func handleNonStreamingResponse(c *gin.Context, resp *http.Response, sessionId string) {
+// 	body, err := io.ReadAll(resp.Body)
+// 	if err != nil {
+// 		c.JSON(http.StatusInternalServerError, gin.H{
+// 			"error": "Failed to read OpenAI response",
+// 		})
+// 		return
+// 	}
 
-	var result map[string]interface{}
-	if err := json.Unmarshal(body, &result); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to parse OpenAI response",
-		})
-		return
-	}
+// 	var result map[string]interface{}
+// 	if err := json.Unmarshal(body, &result); err != nil {
+// 		c.JSON(http.StatusInternalServerError, gin.H{
+// 			"error": "Failed to parse OpenAI response",
+// 		})
+// 		return
+// 	}
 
-	// Extract the message content and save to Redis session
-	if choices, ok := result["choices"].([]interface{}); ok && len(choices) > 0 {
-		if choice, ok := choices[0].(map[string]interface{}); ok {
-			if message, ok := choice["message"].(map[string]interface{}); ok {
-				if content, ok := message["content"].(string); ok {
-					// Save assistant response to Redis session
-					if sessionId != "" {
-						assistantMessage := Message{
-							Role:    "assistant",
-							Content: content,
-						}
-						if err := sessionManager.AddMessage(sessionId, assistantMessage); err != nil {
-							fmt.Printf("Failed to save assistant response to session: %v\n", err)
-						}
-					}
+// 	// Extract the message content and save to Redis session
+// 	if choices, ok := result["choices"].([]interface{}); ok && len(choices) > 0 {
+// 		if choice, ok := choices[0].(map[string]interface{}); ok {
+// 			if message, ok := choice["message"].(map[string]interface{}); ok {
+// 				if content, ok := message["content"].(string); ok {
+// 					// Save assistant response to Redis session
+// 					if sessionId != "" {
+// 						assistantMessage := Message{
+// 							Role:    "assistant",
+// 							Content: content,
+// 						}
+// 						if err := sessionManager.AddMessage(sessionId, assistantMessage); err != nil {
+// 							fmt.Printf("Failed to save assistant response to session: %v\n", err)
+// 						}
+// 					}
 
-					c.JSON(http.StatusOK, gin.H{
-						"response":   content,
-						"session_id": sessionId,
-						"raw":        result,
-					})
-					return
-				}
-			}
-		}
-	}
+// 					c.JSON(http.StatusOK, gin.H{
+// 						"response":   content,
+// 						"session_id": sessionId,
+// 						"raw":        result,
+// 					})
+// 					return
+// 				}
+// 			}
+// 		}
+// 	}
 
-	// Fallback: return the raw response
-	c.JSON(http.StatusOK, result)
-}
+// 	// Fallback: return the raw response
+// 	c.JSON(http.StatusOK, result)
+// }
